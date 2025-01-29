@@ -1,6 +1,7 @@
-use std::{env, process::exit};
+use std::{env, process::exit, collections::HashSet, fs::File, io::copy};
 use bitflags::bitflags;
 use scraper;
+use reqwest;
 
 #[derive(Debug)]
 enum ParsingError {
@@ -33,21 +34,24 @@ struct  Scraper {
     limit: u32,
     path: String,
     url: String,
+    visited: HashSet<String>,
 }
-
+/*
 struct Image {
-    url = Option<String>,
-    name = Option<String>,
-}
+    url: Option<String>,
+    name: Option<String>,
+}*/
 
 impl Scraper {
     pub fn new(scraper: (Flags, u32, String, String)) -> Self {
-        Scraper {
+        let mut a = Scraper {
             flags: scraper.0,
             limit: scraper.1,
             path: scraper.2,
             url: scraper.3,
-        }
+            visited: HashSet::new(),
+        };
+        a
     }
 }
 
@@ -111,26 +115,34 @@ fn init(args: Vec<String>) -> Result<Scraper, ParsingError> {
     Ok(Scraper::new(scrap))
 }
 
-fn scrap_process(scrap: Scraper) -> Result<(), String> {
-    let response = reqwest::blocking::get(scrap.url);
-    let html_content = response.unwrap().text().unwrap();
-    let document = scraper::Html::parse_document(&html_content);
-    let html_product_selector = scraper::Selector::parse("li.product").unwrap();
-    let html_products = document.select(&html_product_selector);
+fn recursive_web_scraping(scrap: &mut Scraper) -> Result<(), String> {
 
-    let mut images: Vec<Image> = Vec::new();
+    let filename = "new.jpeg";
 
+    let mut response = reqwest::blocking::get(scrap.url.as_str()).expect("Failed to dl img");
+    let mut file = File::create(filename).expect("Failed to create file");
+    copy(&mut response, &mut file).expect("Failed to save image");
+    Ok(())
+}
+
+fn scrap_process(scrap: &mut Scraper) -> Result<(), String> {
+    //if scrap.flags.contains(Flags::R) {
+    recursive_web_scraping(scrap);
+    //}
+    //else {
+    //    single_web_scraping(scrap);
+    //}
     Ok(())
 }
 
 fn main() -> Result<(), std::io::Error> {
     let args: Vec<String> = env::args().skip(1).collect();
 
-    let scrap = match init(args) {
+    let mut scrap = match init(args) {
         Ok(new_scrap) => new_scrap,
         _ => return Err(std::io::Error::new(std::io::ErrorKind::Other, "Unknown")),
     };
-    scrap_process(scrap);
+    scrap_process(&mut scrap);
     Ok(())
 }
 
